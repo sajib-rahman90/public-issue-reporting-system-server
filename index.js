@@ -74,6 +74,47 @@ async function run() {
       res.send(result);
     });
 
+    //Dashboards Citizen My issues pages all apis
+    // GET MY ISSUES
+
+    app.get("/my-issues", async (req, res) => {
+      const email = req.query.email;
+      const query = {
+        reporterEmail: email,
+      };
+
+      const result = await issuesCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
+    // UPDATE ISSUE
+
+    app.put("/issues/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const query = {
+        _id: new ObjectId(id),
+      };
+
+      const updatedDoc = {
+        $set: {
+          title: updatedData.title,
+          category: updatedData.category,
+          location: updatedData.location,
+          description: updatedData.description,
+          image: updatedData.image,
+        },
+      };
+
+      const result = await issuesCollection.updateOne(query, updatedDoc);
+
+      res.send(result);
+    });
+
     //payment related apis
     app.post("/issues/:id/create-checkout-session", async (req, res) => {
       const { id } = req.params;
