@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -71,6 +72,92 @@ async function run() {
       const result = await issuesCollection.deleteOne(query);
 
       res.send(result);
+    });
+
+    //payment related apis
+    app.post("/issues/:id/create-checkout-session", async (req, res) => {
+      const { id } = req.params;
+      const { email } = req.body;
+      const { title } = req.body;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "bdt",
+              unit_amount: 100 * 100,
+              product_data: {
+                name: "Issue Boost",
+                description: `Boost issue: ${title}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        customer_email: email,
+        metadata: {
+          type: "issue-boost",
+          issueId: id,
+          email,
+        },
+        success_url: `${process.env.SITE_DOMAIN}/boost-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/issue/${id}`,
+      });
+      // console.log(session);
+      res.send({ url: session.url });
+    });
+
+    //server side confirm payment api check
+
+    app.post("/confirm-boost-payment", async (req, res) => {
+      try {
+        const { sessionId } = req.body;
+
+        // stripe session verify
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        // payment successful check
+        if (session.payment_status === "paid") {
+          const issueId = session.metadata.issueId;
+
+          // timeline data
+          // const timelineEntry = {
+          //   title: "Issue boosted to High priority",
+          //   date: new Date().toLocaleString(),
+          // };
+
+          // update issue
+          const result = await issuesCollection.updateOne(
+            {
+              _id: new ObjectId(issueId),
+            },
+            {
+              $set: {
+                priority: "High",
+              },
+
+              // $push: {
+              //   timeline: timelineEntry,
+              // },
+            },
+          );
+
+          return res.send({
+            success: true,
+            result,
+          });
+        }
+
+        res.send({
+          success: false,
+        });
+      } catch (error) {
+        console.log(error);
+
+        res.status(500).send({
+          error: "Payment confirmation failed",
+        });
+      }
     });
 
     // Send a ping to confirm a successful connection
