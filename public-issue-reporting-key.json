@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "public-issue-reporting-s-869af",
+  "private_key_id": "29b2b929b03d4addc2ddf5082a4d66ad525ffe99",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDNd8dkLIGoURdR\nOjeJ+rrp7zVmTT0mFSbYyjHlrzKx++gsB305C8FDM1FvM+Z86bMZTmkzY1abFH3D\nyxbUnK+dryF0xTdKkkUxRB8x1/AuMJ9NlatOCfe8djj7bRnRLHNnpnU8oArq4Q/n\nlIkpDhRORoz4T/lGtvkDegiMNvG+ipH3YmgLZ5qrlfOaasEt4ZIkBb7B5WB6vbfG\nww+6bR0aAvXVcLLa9fQI682gvETsQpdwq+XTEqTKFSH+a8wt0W8q5W91pt5IP5YI\nS1aGDMd0gK60bv+9/3lNbSEOqjx4zBo3SPNK8W8vVvMa/34TB4bNbIabYRBaSzz1\nxwIvMSrHAgMBAAECggEARh9HWt4/n9CRCyU5uCrsaJM9X70jjeAxIlKbRd6NiCXH\nPmON7o6e9g7JD5Ega+gcOhpDGAkikQmkxFIG6CfTXZbb7ayy6o3R9HbhyJKAQ1tP\nutxGGvuW42hbmR9KbNNlTW4HW9no7/FAitHsH6lQ78fvK32rvuEKSg/3Y9cKmPK4\nBSsuWd90momJ7tF20ThlWZp8j+17UXd3S8mN0j+9VdRs3BKzCYWzq6ovqNZws3TU\nDit2neyFqaxb1eUCvOfiV7RdGISAodmwsE+9+rxdkLkb67+DKvbtrM1FgyTNRiAO\n/ZGJv8Rq5+l/Z1+RPLfydFNyxyxpFfsRNtmV0JLEyQKBgQDyg64IbKrvrx9De6pT\nfiggx9QeKEF74klS1GBc6tisxAM+VWowA6vpL2j46c8bZ7QvZpmxBCZsLcFww3g5\nt8H3tXFT99HIaM/RNHkTpil0zdYypy73QkuMjp+s/pAsO7t9xprCpK4HCLMIHalD\n6vfqPxQ1UsMHjCyODiY3qJmmGQKBgQDY5LkFLmwzAzcHAv8/H41TGQVe5axk78a7\nSkpHIc+JpD0XljB4QEz52rVyHYqmELPimwNtNsST98iQaxaK+3y1CRytEhNnzvZq\nXczGgYaZDuTlYGpPCllu/p/Tx0feua6Go/CK89QubqnU7H01vavTeCWuO5KjImSI\ntiOkXqaz3wKBgFfBZKFxyS0wXozJ3CmYVib+iHhdMs0EZmoNpc0ZwkxKJa5RtDop\nqfSYjlC8MpCFJ0ObyfOvP8QXjo8ifIfOQedEBf1PiN8PZlwas9FzaD73GRJ9QtaA\na9wx4//yofMPrlnmGyxh8QNkl3xRV2XXSdy+9K4TA7XgeGLzJcswPGFJAoGAMA28\n0GEQp9y2fF81ng6niRmqDvRj1ZkqNqSnAEuFZ8Fzp54m7v2QEGtceAQDi/d3Y2Vk\nxPW1Z/MmBJk1TWWao6F5MP8oPX+lKLvPesuHvrGGFSvfYdOxLN5NGua0Dayl9j6s\nNJ0BDaiHCB29QALd5uRftNKOEoa0L3XrP6eY15ECgYEAsI7p/W7cpKQWDSrW1TNu\nLKE/9F4r2GT1qIDShnYfS4+EI81JiIJb8u3cNuD31MahodeHy75SANIg9CApm9vZ\nv3yA73byOVq0K6OwtoF8UmSRDgeHgQhcnyi/RKo0ITdAD9wlJF+TsYrxHhXDCq6e\nEUTniDa+jirjsJ5CZ+3Tmiw=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@public-issue-reporting-s-869af.iam.gserviceaccount.com",
+  "client_id": "106306302779336195804",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40public-issue-reporting-s-869af.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
