@@ -22,7 +22,7 @@ app.use(express.json());
 
 // JWT token verification imp
 const verifyFBToken = (req, res, next) => {
-  console.log("headers in the middleware", req.headers?.authorization);
+  // console.log("headers in the middleware", req.headers?.authorization);
   const token = req.headers?.authorization;
 
   if (!token) {
@@ -32,7 +32,7 @@ const verifyFBToken = (req, res, next) => {
   try {
     const idToken = token.split(" ")[1];
     const decoded = admin.auth().verifyIdToken(idToken);
-    console.log("decoded in the token", decoded);
+    // console.log("decoded in the token", decoded);
     req.decoded_email = decoded.email;
     next();
   } catch (err) {
@@ -59,6 +59,22 @@ async function run() {
     const db = client.db("public-issue-report");
     const usersCollection = db.collection("users");
     const issuesCollection = db.collection("issues");
+
+    //save or update a user in db
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "citizen";
+      user.createdAt = new Date();
+      const email = user.email;
+      const userExists = await usersCollection.findOne({ email });
+
+      if (userExists) {
+        return res.send({ message: "user allready exists" });
+      }
+
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
 
     app.get("/issues", verifyFBToken, async (req, res) => {
       const query = {};
