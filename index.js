@@ -20,7 +20,7 @@ admin.initializeApp({
 app.use(cors());
 app.use(express.json());
 
-// JWT token verification.
+// JWT token verification imp
 const verifyFBToken = (req, res, next) => {
   console.log("headers in the middleware", req.headers?.authorization);
   const token = req.headers?.authorization;
