@@ -21,7 +21,7 @@ app.use(cors());
 app.use(express.json());
 
 // JWT token verification imp
-const verifyFBToken = (req, res, next) => {
+const verifyFBToken = async (req, res, next) => {
   // console.log("headers in the middleware", req.headers?.authorization);
   const token = req.headers?.authorization;
 
@@ -31,7 +31,7 @@ const verifyFBToken = (req, res, next) => {
 
   try {
     const idToken = token.split(" ")[1];
-    const decoded = admin.auth().verifyIdToken(idToken);
+    const decoded = await admin.auth().verifyIdToken(idToken);
     // console.log("decoded in the token", decoded);
     req.decoded_email = decoded.email;
     next();
@@ -60,6 +60,28 @@ async function run() {
     const usersCollection = db.collection("users");
     const issuesCollection = db.collection("issues");
 
+    // User block check api
+    const verifyNotBlocked = async (req, res, next) => {
+      try {
+        const email = req.decoded_email;
+        const user = await usersCollection.findOne({
+          email: email,
+        });
+
+        if (user?.isBlocked) {
+          return res.status(403).send({
+            message: "You are blocked by admin",
+          });
+        }
+
+        next();
+      } catch (error) {
+        return res.status(500).send({
+          message: "Blocked verification failed",
+        });
+      }
+    };
+
     //save or update a user in db
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -74,6 +96,13 @@ async function run() {
 
       const result = await usersCollection.insertOne(user);
       res.send(result);
+    });
+
+    // get a users role
+    app.get("/user/role/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ email });
+      res.send({ role: result?.role });
     });
 
     app.get("/issues", verifyFBToken, async (req, res) => {
@@ -121,7 +150,7 @@ async function run() {
     //Dashboards Citizen My issues pages all apis
     // GET MY ISSUES
 
-    app.get("/my-issues", async (req, res) => {
+    app.get("/my-issues", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {
         reporterEmail: email,
@@ -241,6 +270,51 @@ async function run() {
 
         res.status(500).send({
           error: "Payment confirmation failed",
+        });
+      }
+    });
+
+    // CitizenDashboard apis
+    app.get("/citizen-dashboard-stats/:email", async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        // total issues
+        const totalIssues = await issuesCollection.countDocuments({
+          reporterEmail: email,
+        });
+        // pending
+        const pendingIssues = await issuesCollection.countDocuments({
+          reporterEmail: email,
+          status: "Pending",
+        });
+
+        // in progress
+        const inProgressIssues = await issuesCollection.countDocuments({
+          reporterEmail: email,
+          status: "In Progress",
+        });
+
+        // resolved
+        const resolvedIssues = await issuesCollection.countDocuments({
+          reporterEmail: email,
+          status: "Resolved",
+        });
+
+        // total payments
+        // const totalPayments = await paymentsCollection.countDocuments({
+        //   email: email,
+        // });
+
+        res.send({
+          totalIssues,
+          pendingIssues,
+          inProgressIssues,
+          resolvedIssues,
+        });
+      } catch (error) {
+        res.status(500).send({
+          message: "Failed to load dashboard stats",
         });
       }
     });
