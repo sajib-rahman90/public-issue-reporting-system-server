@@ -21,26 +21,26 @@ app.use(cors());
 app.use(express.json());
 
 // JWT token verification.
-// const verifyFBToken = (req, res, next) => {
-//   console.log("headers in the middleware", req.headers?.authorization);
-//   const token = req.headers?.authorization;
+const verifyFBToken = (req, res, next) => {
+  console.log("headers in the middleware", req.headers?.authorization);
+  const token = req.headers?.authorization;
 
-//   if (!token) {
-//     return res.status(401).send({ message: "unauthorized access" });
-//   }
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
 
-//   try {
-//     const idToken = token.split(" ")[1];
-//     const decoded = admin.auth().verifyIdToken(idToken);
-//     console.log("decoded in the token", decoded);
-//     req.decoded_email = decoded.email;
-//     next();
-//   } catch (err) {
-//     return res.status(401).send({ message: "unauthorized acces" });
-//   }
+  try {
+    const idToken = token.split(" ")[1];
+    const decoded = admin.auth().verifyIdToken(idToken);
+    console.log("decoded in the token", decoded);
+    req.decoded_email = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).send({ message: "unauthorized acces" });
+  }
 
-//   next();
-// };
+  next();
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.hihlt50.mongodb.net/?appName=Cluster0`;
 
@@ -62,7 +62,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const issuesCollection = db.collection("issues");
 
-    app.get("/issues", async (req, res) => {
+    app.get("/issues", verifyFBToken, async (req, res) => {
       const query = {};
       const result = await issuesCollection.find(query).toArray();
       res.send(result);
