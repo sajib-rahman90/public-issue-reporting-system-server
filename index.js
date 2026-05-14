@@ -151,11 +151,11 @@ async function run() {
     });
 
     //  ISSUE TRACKING COLLECTION
-    // app.post("/issue-tracking", async (req, res) => {
-    //   const trackingInfo = req.body;
-    //   const result = await trackingCollection.insertOne(trackingInfo);
-    //   res.send(result);
-    // });
+    app.post("/issue-tracking", async (req, res) => {
+      const trackingInfo = req.body;
+      const result = await trackingCollection.insertOne(trackingInfo);
+      res.send(result);
+    });
 
     //  ISSUE COUNT FOR USER
     app.get("/my-issues-count/:email", async (req, res) => {
@@ -373,7 +373,97 @@ async function run() {
       res.send(result);
     });
 
-    //Premium Payment successful api
+    //Admin Dashbord all apis
+    app.get("/admin/issues", async (req, res) => {
+      try {
+        const issues = await issuesCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send(issues);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch issues" });
+      }
+    });
+
+    app.get("/staff", async (req, res) => {
+      try {
+        const staff = await usersCollection
+          .find({ role: "staff" })
+          .project({
+            name: 1,
+            email: 1,
+          })
+          .toArray();
+
+        res.send(staff);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch staff" });
+      }
+    });
+
+    app.patch("/admin/issues/assign/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { staffEmail, staffName } = req.body;
+
+        const filter = { _id: new ObjectId(id) };
+
+        const issue = await issuesCollection.findOne(filter);
+
+        if (issue.assignedStaffEmail) {
+          return res.status(400).send({ message: "Already assigned" });
+        }
+
+        const updateDoc = {
+          $set: {
+            assignedStaffEmail: staffEmail,
+            assignedStaffName: staffName,
+            assignedAt: new Date(),
+          },
+        };
+
+        const result = await issuesCollection.updateOne(filter, updateDoc);
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Assignment failed" });
+      }
+    });
+
+    app.patch("/admin/issues/reject/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ message: "Invalid ID" });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+
+        const issue = await issuesCollection.findOne(filter);
+
+        if (!issue) {
+          return res.status(404).send({ message: "Issue not found" });
+        }
+
+        if (issue.status?.toLowerCase() !== "pending") {
+          return res.status(400).send({
+            message: "Only pending issues can be rejected",
+          });
+        }
+
+        const result = await issuesCollection.updateOne(filter, {
+          $set: { status: "Rejected" },
+        });
+
+        res.send(result);
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({ message: "Reject failed server error" });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
