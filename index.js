@@ -59,13 +59,14 @@ async function run() {
     const db = client.db("public-issue-report");
     const usersCollection = db.collection("users");
     const issuesCollection = db.collection("issues");
+    const trackingCollection = db.collection("issueTracking");
 
     // User block check api
     const verifyNotBlocked = async (req, res, next) => {
       try {
         const email = req.decoded_email;
         const user = await usersCollection.findOne({
-          email: email,
+          email,
         });
 
         if (user?.isBlocked) {
@@ -128,11 +129,41 @@ async function run() {
       }
     });
 
+    // Users report issues api
     app.post("/issues", async (req, res) => {
       const issueInfo = req.body;
-      const result = await issuesCollection.insertOne(issueInfo);
+      const email = issueInfo.reporterEmail;
+      const user = await usersCollection.findOne({ email });
+      const reportedCount = await issuesCollection.countDocuments({
+        reporterEmail: email,
+      });
 
-      res.send(result);
+      if (!user?.isPremium && reportedCount >= 3) {
+        return res.status(403).send({
+          message: "Free users can report only 3 issues",
+        });
+      }
+
+      const result = await issuesCollection.insertOne(issueInfo);
+      res.send({
+        insertedId: result.insertedId,
+      });
+    });
+
+    //  ISSUE TRACKING COLLECTION
+    // app.post("/issue-tracking", async (req, res) => {
+    //   const trackingInfo = req.body;
+    //   const result = await trackingCollection.insertOne(trackingInfo);
+    //   res.send(result);
+    // });
+
+    //  ISSUE COUNT FOR USER
+    app.get("/my-issues-count/:email", async (req, res) => {
+      const email = req.params.email;
+      const count = await issuesCollection.countDocuments({
+        reporterEmail: email,
+      });
+      res.send({ count });
     });
 
     //create delete api for delete an issue from issues details page
@@ -274,7 +305,7 @@ async function run() {
       }
     });
 
-    // CitizenDashboard apis
+    // CitizenDashboard start apis
     app.get("/citizen-dashboard-stats/:email", async (req, res) => {
       const email = req.params.email;
 
@@ -318,6 +349,31 @@ async function run() {
         });
       }
     });
+
+    // Citizen Profile api
+    app.get("/users/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email });
+      res.send(user);
+    });
+
+    // Update Profile
+    app.patch("/users/update/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+      const { name, photo } = req.body;
+      const filter = { email };
+      const updatedDoc = {
+        $set: {
+          name,
+          photo,
+        },
+      };
+
+      const result = await usersCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
+    //Premium Payment successful api
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
