@@ -465,6 +465,61 @@ async function run() {
       }
     });
 
+    //Admin manages users api
+    app.get("/admin/users", async (req, res) => {
+      try {
+        const users = await usersCollection
+          .find({ role: "citizen" })
+          .project({
+            name: 1,
+            email: 1,
+            photo: 1,
+            isBlocked: 1,
+            isPremium: 1,
+            subscriptionDate: 1,
+          })
+          .toArray();
+
+        res.send(users);
+      } catch (err) {
+        res.status(500).send({
+          message: "Failed to fetch users",
+        });
+      }
+    });
+
+    //Admin manages block--unblock users api
+    app.patch("/admin/users/block/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = {
+          _id: new ObjectId(id),
+        };
+        const user = await usersCollection.findOne(filter);
+        if (!user) {
+          return res.status(404).send({
+            message: "User not found",
+          });
+        }
+
+        const updatedStatus = !user.isBlocked;
+        const result = await usersCollection.updateOne(filter, {
+          $set: {
+            isBlocked: updatedStatus,
+          },
+        });
+        res.send({
+          success: true,
+          isBlocked: updatedStatus,
+          result,
+        });
+      } catch (err) {
+        res.status(500).send({
+          message: "Failed to update user status",
+        });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
