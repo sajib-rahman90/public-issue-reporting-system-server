@@ -750,6 +750,36 @@ async function run() {
       }
     });
 
+    //Staff Dashboard start  api
+    app.get("/staff/dashboard", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        // all assigned issues
+        const issues = await issuesCollection
+          .find({ assignedStaffEmail: email })
+          .toArray();
+        const assigned = issues.length;
+        const resolved = issues.filter((i) => i.status === "Resolved").length;
+        const inProgress = issues.filter(
+          (i) => i.status === "In-progress",
+        ).length;
+        // today tasks
+        const today = new Date().toISOString().split("T")[0];
+        const todayTasks = issues.filter((i) => {
+          if (!i.assignedAt) return false;
+          return i.assignedAt.toString().includes(today);
+        });
+        res.send({
+          assigned,
+          resolved,
+          inProgress,
+          todayTasks,
+        });
+      } catch (err) {
+        res.status(500).send({ message: "Dashboard failed" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
