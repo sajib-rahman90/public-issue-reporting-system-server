@@ -519,6 +519,236 @@ async function run() {
         });
       }
     });
+    // ADMIN MANAGE USERS ALL API WITH FIREBASE LOGIN
+    // GET ALL STAFF
+    app.get("/admin/staff", async (req, res) => {
+      try {
+        const result = await usersCollection.find({ role: "staff" }).toArray();
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({
+          message: "Failed to fetch staff",
+        });
+      }
+    });
+
+    // CREATE STAFF
+    app.post("/admin/staff", async (req, res) => {
+      try {
+        const { name, email, password, phone, photo } = req.body;
+        // 1. CREATE FIREBASE USER
+        const firebaseUser = await admin.auth().createUser({
+          email,
+          password,
+          displayName: name,
+          photoURL: photo,
+        });
+
+        // 2. SAVE TO MONGODB
+        const staffData = {
+          name,
+          email,
+          phone,
+          photo,
+          firebaseUID: firebaseUser.uid,
+          role: "staff",
+          isBlocked: false,
+          createdAt: new Date(),
+        };
+        const result = await usersCollection.insertOne(staffData);
+        res.send({
+          success: true,
+          insertedId: result.insertedId,
+        });
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({ message: err.message });
+      }
+    });
+
+    // UPDATE STAFF
+    app.patch("/admin/staff/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
+        const filter = {
+          _id: new ObjectId(id),
+        };
+        const updateDoc = {
+          $set: {
+            name: updatedData.name,
+            phone: updatedData.phone,
+            photo: updatedData.photo,
+          },
+        };
+        const result = await usersCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({
+          message: "Failed to update staff",
+        });
+      }
+    });
+
+    // DELETE STAFF
+    app.delete("/admin/staff/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = {
+          _id: new ObjectId(id),
+        };
+        // FIND STAFF
+        const staff = await usersCollection.findOne(filter);
+
+        if (!staff) {
+          return res.status(404).send({
+            message: "Staff not found",
+          });
+        }
+        // DELETE FIREBASE USER
+        if (staff.firebaseUID) {
+          await admin.auth().deleteUser(staff.firebaseUID);
+        }
+        // DELETE DATABASE USER
+        const result = await usersCollection.deleteOne(filter);
+        res.send({
+          success: true,
+          result,
+        });
+      } catch (err) {
+        console.log(err);
+
+        res.status(500).send({
+          message: "Failed to delete staff",
+        });
+      }
+    });
+
+    //Admin Profile api
+    app.get("/admin/profile", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        const admin = await usersCollection.findOne({ email });
+        if (!admin) {
+          return res.status(404).send({ message: "Admin not found" });
+        }
+        res.send(admin);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to get profile" });
+      }
+    });
+
+    //Admin Profile update api
+    app.put("/admin/profile", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        const updatedData = req.body;
+        const result = await usersCollection.updateOne(
+          { email },
+          {
+            $set: {
+              name: updatedData.name,
+              phone: updatedData.phone,
+              photo: updatedData.photo,
+            },
+          },
+        );
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update profile" });
+      }
+    });
+
+    //Staff Dashboards all api
+    //Staff Profile api
+    app.get("/staff/profile", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        const staff = await usersCollection.findOne({
+          email,
+          role: "staff",
+        });
+
+        if (!staff) {
+          return res.status(404).send({ message: "Staff not found" });
+        }
+        res.send(staff);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to get staff profile" });
+      }
+    });
+
+    //Staff Profile update api
+    app.put("/staff/profile", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        const { name, photo } = req.body;
+        const result = await usersCollection.updateOne(
+          { email, role: "staff" },
+          {
+            $set: {
+              name,
+              photo,
+            },
+          },
+        );
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update profile" });
+      }
+    });
+
+    //Staff Assigned issues get api
+    app.get("/staff/assigned-issues", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.decoded_email;
+        const { status, priority } = req.query;
+        let query = {
+          assignedStaffEmail: email,
+        };
+        if (status) query.status = status;
+        if (priority) query.priority = priority;
+        const issues = await issuesCollection
+          .find(query)
+          .sort({ upvote: -1, createdAt: -1 })
+          .toArray();
+
+        res.send(issues);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to get issues" });
+      }
+    });
+
+    //Staff Assigned issues update api
+    app.patch("/staff/issues/status/:id", verifyFBToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const issue = await issuesCollection.findOne(filter);
+
+        if (!issue) {
+          return res.status(404).send({ message: "Issue not found" });
+        }
+
+        const result = await issuesCollection.updateOne(filter, {
+          $set: {
+            status,
+          },
+        });
+        // timeline insert
+        await trackingCollection.insertOne({
+          issueId: id,
+          message: `Status changed to ${status}`,
+          status,
+          createdAt: new Date(),
+        });
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Status update failed" });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
