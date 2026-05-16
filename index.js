@@ -311,6 +311,28 @@ async function run() {
       res.send(result);
     });
 
+    //Latest resolved section api
+    app.get("/latest-resolved-issues", async (req, res) => {
+      try {
+        const issues = await issuesCollection
+          .find({
+            status: "Resolved",
+          })
+          .sort({
+            updatedAt: -1,
+            createdAt: -1,
+          })
+          .limit(6)
+          .toArray();
+        res.send(issues);
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          message: "Failed to fetch latest resolved issues",
+        });
+      }
+    });
+
     //Dashboards Citizen My issues pages all apis
     // GET MY ISSUES
     app.get("/my-issues", verifyFBToken, async (req, res) => {
