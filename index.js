@@ -59,6 +59,7 @@ async function run() {
     const db = client.db("public-issue-report");
     const usersCollection = db.collection("users");
     const issuesCollection = db.collection("issues");
+    const paymentsCollection = db.collection("payments");
     const trackingCollection = db.collection("issueTracking");
 
     // User block check api
@@ -106,26 +107,160 @@ async function run() {
       res.send({ role: result?.role });
     });
 
-    app.get("/issues", verifyFBToken, async (req, res) => {
-      const query = {};
-      const result = await issuesCollection.find(query).toArray();
-      res.send(result);
+    // Allissues pages apis
+    app.get("/issues", async (req, res) => {
+      try {
+        const { search, category, status, priority, page = 1 } = req.query;
+        const query = {};
+        if (search) {
+          query.$or = [
+            { title: { $regex: search, $options: "i" } },
+            { category: { $regex: search, $options: "i" } },
+            { location: { $regex: search, $options: "i" } },
+            { description: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        if (category) query.category = category;
+        if (status) query.status = status;
+        if (priority) query.priority = priority;
+
+        const limit = 9;
+        const skip = (page - 1) * limit;
+        const issues = await issuesCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .toArray();
+
+        const total = await issuesCollection.countDocuments(query);
+
+        res.send({
+          issues,
+          hasMore: skip + issues.length < total,
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Server error" });
+      }
     });
-    app.get("/issues/:id", async (req, res) => {
+
+    // Allissues pages apis
+    app.patch("/issues/:id/upvote", verifyFBToken, async (req, res) => {
       try {
         const id = req.params.id;
-
-        const result = await issuesCollection.findOne({
+        const email = req.decoded_email;
+        const issue = await issuesCollection.findOne({
           _id: new ObjectId(id),
         });
 
+        if (!issue) {
+          return res.status(404).send({
+            error: "Issue not found",
+          });
+        }
+        if (issue.reporterEmail === email) {
+          return res.status(400).send({
+            error: "Cannot upvote own issue",
+          });
+        }
+
+        if (issue?.upvotes?.includes(email)) {
+          return res.status(400).send({
+            error: "Already upvoted",
+          });
+        }
+
+        const result = await issuesCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $push: {
+              upvotes: email,
+            },
+
+            $inc: {
+              upvote: 1,
+            },
+          },
+        );
+
+        if (!result.modifiedCount) {
+          return res.status(400).send({
+            error: "Upvote failed",
+          });
+        }
+
+        await trackingCollection.insertOne({
+          issueId: id,
+          message: `Upvoted by ${email}`,
+          updatedBy: email,
+          status: issue.status,
+          time: new Date(),
+        });
+
+        res.send({
+          success: true,
+          message: "Upvoted successfully",
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          error: "Server error",
+        });
+      }
+    });
+
+    app.get("/issues/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await issuesCollection.findOne({
+          _id: new ObjectId(id),
+        });
         if (!result) {
           return res.status(404).send({ message: "Issue not found" });
         }
-
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: "Server error" });
+      }
+    });
+
+    app.patch("/issues/update/:id", verifyFBToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.decoded_email;
+        const { title, category, description, location } = req.body;
+        const result = await issuesCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: {
+              title,
+              category,
+              description,
+              location,
+              updatedAt: new Date(),
+            },
+          },
+        );
+        await trackingCollection.insertOne({
+          issueId: id,
+          message: `Issue updated by ${email}`,
+          updatedBy: email,
+          status: id.status,
+          title: "Issue Updated",
+          date: new Date(),
+        });
+
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          message: "Update failed",
+        });
       }
     });
 
@@ -150,14 +285,14 @@ async function run() {
       });
     });
 
-    //  ISSUE TRACKING COLLECTION
+    //Issue tracking collection
     app.post("/issue-tracking", async (req, res) => {
       const trackingInfo = req.body;
       const result = await trackingCollection.insertOne(trackingInfo);
       res.send(result);
     });
 
-    //  ISSUE COUNT FOR USER
+    // Issue for user
     app.get("/my-issues-count/:email", async (req, res) => {
       const email = req.params.email;
       const count = await issuesCollection.countDocuments({
@@ -172,21 +307,17 @@ async function run() {
       const query = {
         _id: new ObjectId(id),
       };
-
       const result = await issuesCollection.deleteOne(query);
-
       res.send(result);
     });
 
     //Dashboards Citizen My issues pages all apis
     // GET MY ISSUES
-
     app.get("/my-issues", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {
         reporterEmail: email,
       };
-
       const result = await issuesCollection
         .find(query)
         .sort({ createdAt: -1 })
@@ -195,8 +326,7 @@ async function run() {
       res.send(result);
     });
 
-    // UPDATE ISSUE
-
+    //Udate issues
     app.put("/issues/:id", async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
@@ -215,14 +345,13 @@ async function run() {
       };
 
       const result = await issuesCollection.updateOne(query, updatedDoc);
-
       res.send(result);
     });
 
-    //payment related apis
+    //Boost payment related apis
     app.post("/issues/:id/create-checkout-session", async (req, res) => {
       const { id } = req.params;
-      const { email } = req.body;
+      const { email, userName } = req.body;
       const { title } = req.body;
       const session = await stripe.checkout.sessions.create({
         line_items: [
@@ -244,6 +373,7 @@ async function run() {
           type: "issue-boost",
           issueId: id,
           email,
+          userName,
         },
         success_url: `${process.env.SITE_DOMAIN}/boost-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/issue/${id}`,
@@ -253,55 +383,168 @@ async function run() {
     });
 
     //server side confirm payment api check
-
     app.post("/confirm-boost-payment", async (req, res) => {
       try {
         const { sessionId } = req.body;
-
         // stripe session verify
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-
+        console.log(session);
         // payment successful check
-        if (session.payment_status === "paid") {
-          const issueId = session.metadata.issueId;
+        if (session.payment_status !== "paid") {
+          return res.send({
+            success: false,
+            message: "Payment not completed",
+          });
+        }
+        // metadata
+        const issueId = session.metadata.issueId;
+        const userName = session.metadata.userName;
+        const userEmail = session.metadata.email;
+        // duplicate payment check
+        const existingPayment = await paymentsCollection.findOne({
+          issueId,
+        });
 
-          // timeline data
-          // const timelineEntry = {
-          //   title: "Issue boosted to High priority",
-          //   date: new Date().toLocaleString(),
-          // };
-
-          // update issue
-          const result = await issuesCollection.updateOne(
-            {
-              _id: new ObjectId(issueId),
-            },
-            {
-              $set: {
-                priority: "High",
-              },
-
-              // $push: {
-              //   timeline: timelineEntry,
-              // },
-            },
-          );
-
+        if (existingPayment) {
           return res.send({
             success: true,
-            result,
+            message: "Payment already processed",
           });
         }
 
+        // issue priority update
+        await issuesCollection.updateOne(
+          {
+            _id: new ObjectId(issueId),
+          },
+
+          {
+            $set: {
+              priority: "High",
+            },
+          },
+        );
+
+        // payment history save
+        await paymentsCollection.insertOne({
+          issueId,
+          sessionId: session.id,
+          transactionId: session.payment_intent,
+          customerName: userName,
+          customerEmail: userEmail,
+          amount: session.amount_total / 100,
+          paymentStatus: session.payment_status,
+          createdAt: new Date(),
+        });
+
+        // tracking timeline save
+        await trackingCollection.insertOne({
+          issueId,
+          status: "Priority Boosted",
+          message: "Issue priority upgraded to High after successful payment",
+          updatedBy: "Citizen",
+          userName: userName,
+          userEmail: userEmail,
+          date: new Date(),
+        });
+
         res.send({
-          success: false,
+          success: true,
+          message: "Payment successful and timeline updated",
         });
       } catch (error) {
         console.log(error);
-
         res.status(500).send({
-          error: "Payment confirmation failed",
+          success: false,
+          message: "Payment confirmation failed",
         });
+      }
+    });
+
+    //Subscribe premium related all apis
+    app.post("/create-payment-session", async (req, res) => {
+      try {
+        const { email, name, price } = req.body;
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "bdt",
+                product_data: {
+                  name: "Premium Subscription",
+                  description: "Unlimited issue submission access",
+                },
+                unit_amount: price * 100,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          customer_email: email,
+          metadata: {
+            email,
+            name,
+          },
+          success_url: `${process.env.SITE_DOMAIN}/premium-success?session_id={CHECKOUT_SESSION_ID}&email=${email}`,
+          cancel_url: `${process.env.SITE_DOMAIN}/payment-failed`,
+        });
+
+        res.send({ url: session.url });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Stripe session failed" });
+      }
+    });
+
+    //Premium payment success page api
+    app.post("/confirm-premium-payment", async (req, res) => {
+      try {
+        const { sessionId, email } = req.body;
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        if (session.payment_status !== "paid") {
+          return res.send({ success: false });
+        }
+        // duplicate check
+        const existingPayment = await paymentsCollection.findOne({
+          sessionId,
+        });
+
+        if (existingPayment) {
+          return res.send({
+            success: true,
+            message: "Already processed",
+          });
+        }
+
+        await paymentsCollection.insertOne({
+          email,
+          sessionId,
+          amount: session.amount_total / 100,
+          transactionId: session.payment_intent,
+          status: "premium_subscription",
+          paymentStatus: session.payment_status,
+          createdAt: new Date(),
+        });
+        // USER PREMIUM UPDATE
+        await usersCollection.updateOne(
+          { email },
+          { $set: { isPremium: true } },
+        );
+
+        await trackingCollection.insertOne({
+          email,
+          sessionId,
+          status: "premium_subscription",
+          transactionId: session.payment_intent,
+          message: "Premium Payment is successful ",
+          timestamp: new Date(),
+        });
+
+        res.send({ success: true });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ success: false });
       }
     });
 
@@ -333,15 +576,16 @@ async function run() {
         });
 
         // total payments
-        // const totalPayments = await paymentsCollection.countDocuments({
-        //   email: email,
-        // });
+        const totalPayments = await paymentsCollection.countDocuments({
+          email: email,
+        });
 
         res.send({
           totalIssues,
           pendingIssues,
           inProgressIssues,
           resolvedIssues,
+          totalPayments,
         });
       } catch (error) {
         res.status(500).send({
@@ -533,7 +777,7 @@ async function run() {
     });
 
     // CREATE STAFF
-    app.post("/admin/staff", async (req, res) => {
+    app.post("/admin/staff", verifyFBToken, async (req, res) => {
       try {
         const { name, email, password, phone, photo } = req.body;
         // 1. CREATE FIREBASE USER
