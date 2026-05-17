@@ -455,6 +455,7 @@ async function run() {
           customerName: userName,
           customerEmail: userEmail,
           amount: session.amount_total / 100,
+          status: "Boosted",
           paymentStatus: session.payment_status,
           createdAt: new Date(),
         });
@@ -462,12 +463,13 @@ async function run() {
         // tracking timeline save
         await trackingCollection.insertOne({
           issueId,
+          sessionId: session.id,
           status: "Priority Boosted",
           message: "Issue priority upgraded to High after successful payment",
           updatedBy: "Citizen",
           userName: userName,
           userEmail: userEmail,
-          date: new Date(),
+          createdAt: new Date(),
         });
 
         res.send({
@@ -527,40 +529,43 @@ async function run() {
         if (session.payment_status !== "paid") {
           return res.send({ success: false });
         }
+
+        const name = session.metadata.name;
         // duplicate check
-        const existingPayment = await paymentsCollection.findOne({
-          sessionId,
-        });
+        // const existingPayment = await paymentsCollection.findOne({
+        //   sessionId,
+        // });
 
-        if (existingPayment) {
-          return res.send({
-            success: true,
-            message: "Already processed",
-          });
-        }
-
-        await paymentsCollection.insertOne({
-          email,
-          sessionId,
-          amount: session.amount_total / 100,
-          transactionId: session.payment_intent,
-          status: "premium_subscription",
-          paymentStatus: session.payment_status,
-          createdAt: new Date(),
-        });
-        // USER PREMIUM UPDATE
+        // if (existingPayment) {
+        //   return res.send({
+        //     success: true,
+        //     message: "Already processed",
+        //   });
+        // }
         await usersCollection.updateOne(
           { email },
           { $set: { isPremium: true } },
         );
 
+        await paymentsCollection.insertOne({
+          customerName: name,
+          customerEmail: email,
+          sessionId: session.id,
+          amount: session.amount_total / 100,
+          transactionId: session.payment_intent,
+          status: "Subscription",
+          paymentStatus: session.payment_status,
+          createdAt: new Date(),
+        });
+
         await trackingCollection.insertOne({
-          email,
-          sessionId,
-          status: "premium_subscription",
+          customerName: name,
+          customerEmail: email,
+          sessionId: session.id,
+          status: "Subscription",
           transactionId: session.payment_intent,
           message: "Premium Payment is successful ",
-          timestamp: new Date(),
+          createdAt: new Date(),
         });
 
         res.send({ success: true });
@@ -637,6 +642,111 @@ async function run() {
 
       const result = await usersCollection.updateOne(filter, updatedDoc);
       res.send(result);
+    });
+
+    //Admin Dashbord Start
+    app.get("/admin/dashboard-stats", async (req, res) => {
+      try {
+        // issue stats
+        const totalIssues = await issuesCollection.countDocuments();
+        const resolvedIssues = await issuesCollection.countDocuments({
+          status: "Resolved",
+        });
+        const pendingIssues = await issuesCollection.countDocuments({
+          status: "Pending",
+        });
+        const rejectedIssues = await issuesCollection.countDocuments({
+          status: "Rejected",
+        });
+        // payment stats
+        const paymentData = await paymentsCollection.find({}).toArray();
+        const totalPayment = paymentData.reduce(
+          (sum, payment) => sum + Number(payment.amount || 0),
+          0,
+        );
+
+        // latest issues
+        const latestIssues = await issuesCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .toArray();
+
+        // latest payments
+        const latestPayments = await paymentsCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .toArray();
+
+        const usersCollection = db.collection("users");
+        const latestUsers = await usersCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .toArray();
+
+        // chart data
+        const chartData = [
+          {
+            name: "Resolved",
+            value: resolvedIssues,
+          },
+          {
+            name: "Pending",
+            value: pendingIssues,
+          },
+          {
+            name: "Rejected",
+            value: rejectedIssues,
+          },
+        ];
+        res.send({
+          totalIssues,
+          resolvedIssues,
+          pendingIssues,
+          rejectedIssues,
+          totalPayment,
+          latestIssues,
+          latestPayments,
+          latestUsers,
+          chartData,
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          message: "Dashboard data failed",
+        });
+      }
+    });
+
+    app.get("/admin/payments", async (req, res) => {
+      try {
+        const { email, status, search } = req.query;
+        const query = {};
+        if (email) {
+          query.customerEmail = email;
+        }
+        if (status) {
+          query.paymentStatus = status;
+        }
+        if (search) {
+          query.$or = [
+            { customerName: { $regex: search, $options: "i" } },
+            { customerEmail: { $regex: search, $options: "i" } },
+            { transactionId: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        const payments = await paymentsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send(payments);
+      } catch (err) {
+        res.status(500).send({ message: "Server error" });
+      }
     });
 
     //Admin Dashbord all apis
@@ -887,6 +997,35 @@ async function run() {
         res.status(500).send({
           message: "Failed to delete staff",
         });
+      }
+    });
+    // Admin payments api
+    app.get("/admin/payments", async (req, res) => {
+      try {
+        const { email, status, search } = req.query;
+        const query = {};
+        if (email) {
+          query.customerEmail = email;
+        }
+
+        if (status) {
+          query.paymentStatus = status;
+        }
+
+        if (search) {
+          query.$or = [
+            { customerName: { $regex: search, $options: "i" } },
+            { customerEmail: { $regex: search, $options: "i" } },
+            { transactionId: { $regex: search, $options: "i" } },
+          ];
+        }
+        const payments = await paymentsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(payments);
+      } catch (err) {
+        res.status(500).send({ message: "Server error" });
       }
     });
 
